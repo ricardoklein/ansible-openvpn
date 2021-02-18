@@ -1,0 +1,10 @@
+---
+- name: restart_openvpn_systemd
+  systemd:
+    name:  "openvpn@{{ ansible_openvpn__proto }}"
+    state: restarted
+
+- name: restart_firewalld
+  systemd:
+    name:  firewalld
+    state: restarted

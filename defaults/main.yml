@@ -1,0 +1,60 @@
+---
+ansible_openvpn__user:  "nobody"
+ansible_openvpn__group: "nobody"
+
+ansible_openvpn__config_dir: "/etc/openvpn"
+ansible_openvpn__key_dir: "{{ ansible_openvpn__config_dir }}/keys"
+ansible_openvpn__ovpn_dir: "{{ ansible_openvpn__config_dir }}/clients"
+
+ansible_openvpn__easyrsa_dir: "{{ ansible_openvpn__config_dir }}/easyrsa"
+ansible_openvpn__easyrsa_country: "SomeCountry"
+ansible_openvpn__easyrsa_province: "NA"
+ansible_openvpn__easyrsa_city: "SomeCity"
+ansible_openvpn__easyrsa_org: "SomeOrg"
+ansible_openvpn__easyrsa_email: "someone@foo.bar"
+ansible_openvpn__easyrsa_ou: "IT"
+
+ansible_openvpn__rsa_bits: 2048
+
+ansible_openvpn__port:  1194
+ansible_openvpn__proto: udp
+
+ansible_openvpn__auth_alg: "SHA512"
+ansible_openvpn__cipher: "AES-256-CBC"
+ansible_openvpn__tls_cipher: "TLS-DHE-RSA-WITH-AES-256-GCM-SHA384"
+
+ansible_openvpn__keepalive_ping: 30
+ansible_openvpn__keepalive_timeout: 60
+
+ansible_openvpn__tunnel_net: "server 10.10.1.0 255.255.255.0"
+
+ansible_openvpn__plugins:
+  plugin /usr/lib64/openvpn/plugins/openvpn-plugin-auth-pam.so login
+
+# It's a very good idea to also set DNS servers you trust, so you
+# don't rely on your local resolvers...
+# Maybe I can create a dnsmasq or unbound playbook to setup a resolver
+# In the openVPN server to serve only the tunnel, then you will also have
+# a "trusted" DNS server while connected to your VPN.
+ansible_openvpn__push: |
+  #push "dhcp-option DNS 4.2.2.2"
+  #push "dhcp-option DNS 208.67.222.222"
+  push "redirect-gateway def1 bypass-dhcp"
+
+ansible_openvpn__packages:
+  - openvpn
+  - openvpn-auth-pam-plugin
+  - easy-rsa
+  - firewalld
+
+# USERS
+#ansible_openvpn__clients: 
+#  - { name: "user1", password: "hashed password" }
+#  - { name: "user2", password: "hashed password" }
+
+#ansible_openvpn__clients_revoked:
+#  - { "name": "revoked_user_01" }
+
+# To set a hased password use: 
+#   PASSWORD=$(pwgen -n 20 -1) && echo "PASSWORD TEXT: ${PASSWORD}" && echo "PASSWORD HASH: $(openssl passwd -salt YOURSALT -1 ${PASSWORD})"
+# Ansible will update user password if they differ

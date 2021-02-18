@@ -1,0 +1,39 @@
+client
+
+tls-client
+auth {{ ansible_openvpn__auth_alg }}
+askpass
+auth-user-pass
+cipher {{ ansible_openvpn__cipher }}
+remote-cert-tls server
+tls-version-min 1.2
+
+proto {{ ansible_openvpn__proto }}
+remote {{ inventory_hostname }} {{ ansible_openvpn__port }}
+dev tun
+
+nobind
+keepalive {{ ansible_openvpn__keepalive_ping }} {{ ansible_openvpn__keepalive_timeout }}
+persist-key
+persist-tun
+verb 3
+
+#route-method exe
+#route-delay 2
+
+key-direction 1
+<ca>
+{{ ca_cert.content|b64decode }}
+</ca>
+
+<tls-auth>
+{{ tls_auth.content|b64decode }}
+</tls-auth>
+
+<cert>
+{{ item.0.content|b64decode }}
+</cert>
+
+<key>
+{{ item.1.content|b64decode }}
+</key>
