@@ -119,6 +119,11 @@
     chdir: "{{ ansible_openvpn__key_dir }}"
     creates: ta.key
 
+- name: OPENVPN | Creating vpnusers group
+  ansible.builtin.group:
+    name: vpnusers
+    state: present
+
 - name: OPENVPN | Creating users
   user:
     name: "{{ item.name }}"
@@ -219,3 +224,9 @@
     sysctl_set: yes
     state: present
     reload: yes
+
+- name: OPENVPN | Ensure openvpn starts on boot
+  systemd:
+    name:  "openvpn@{{ ansible_openvpn__proto }}"
+    enabled: yes
+
