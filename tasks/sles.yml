@@ -1,0 +1,11 @@
+---
+- name: OPENVPN | Install OpenVPN
+  zypper:
+    name: "{{ ansible_openvpn__packages }}"
+    state: latest
+    #update_cache: yes
+
+- name: OPENVPN | Ensure yast config is not in sysctl
+  ansible.builtin.file:
+    path:  /etc/sysctl.d/70-yast.conf
+    state: absent

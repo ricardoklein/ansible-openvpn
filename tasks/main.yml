@@ -1,0 +1,232 @@
+---
+# MAIN ANSIBLE TASK
+
+- import_tasks: tasks/sles.yml
+  when: (ansible_os_family == 'Suse' )
+  become: yes
+
+- name: OPENVPN | Enable Firewalld
+  systemd:
+    name: firewalld
+    enabled: yes
+    state: started
+
+- name: OPENVPN | FirewallD masquerade
+  firewalld:
+    masquerade: True
+    state: enabled
+    permanent: true
+    zone: public
+  notify:  restart_firewalld
+
+- name: OPENVPN | FirewallD set tun0 to zone trusted
+  firewalld:
+    interface: tun0
+    permanent: true
+    zone: trusted
+    state: enabled
+
+- name: OPENVPN | FirewallD allow SSH
+  firewalld:
+    service: ssh
+    permanent: true
+    state: enabled
+
+- name: OPENVPN | FirewallD allow openvpn
+  firewalld:
+    port: "{{ ansible_openvpn__port }}/{{ ansible_openvpn__proto }}"
+    permanent: true
+    state: enabled
+
+- name: OPENVPN | Create key directory
+  file:
+    path: "{{ ansible_openvpn__key_dir }}"
+    state: directory
+    owner: "{{ ansible_openvpn__user  }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode: '0700'
+
+- name: OPENVPN | Create easyrsa directory
+  file:
+    path:  "{{ ansible_openvpn__easyrsa_dir }}"
+    state: directory
+    owner: root 
+    group: root
+    mode: '0700'
+
+- name: OPENVPN | Copy easyrsa vars
+  template:
+    src:   easyrsa_vars.j2
+    dest:  "{{ ansible_openvpn__easyrsa_dir }}/vars"
+    owner: root 
+    group: root
+    mode:  '0700'
+
+- name: OPENVPN | Init PKI
+  command: easyrsa init-pki
+  args:
+    chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
+    creates: "{{ ansible_openvpn__easyrsa_dir }}/pki"
+
+- name: OPENVPN | Build-ca
+  command: easyrsa --batch build-ca nopass
+  args:
+    chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
+    creates: "{{ ansible_openvpn__easyrsa_dir }}/pki/ca.crt"
+
+- name: OPENVPN | Copy CA
+  copy:
+    remote_src: yes
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/ca.crt"
+    dest: "{{ ansible_openvpn__key_dir }}"
+    owner: "{{ ansible_openvpn__user }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode:  '0400'
+    
+- name: OPENVPN | Create Server Key
+  command: easyrsa build-server-full server nopass
+  args:
+    chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
+    creates: "{{ ansible_openvpn__easyrsa_dir}}/pki/private/server.key"
+
+- name: OPENVPN | Copy server key
+  copy:
+    remote_src: yes
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/private/server.key"
+    dest: "{{ ansible_openvpn__key_dir }}"
+    owner: "{{ ansible_openvpn__user }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode:  '0400'
+
+- name: OPENVPN | Copy server crt
+  copy:
+    remote_src: yes
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/issued/server.crt"
+    dest: "{{ ansible_openvpn__key_dir }}"
+    owner: "{{ ansible_openvpn__user }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode:  '0400'
+
+- name: OPENVPN | Create dhparam
+  command: openssl dhparam -out {{ ansible_openvpn__key_dir}}/dh.pem {{ ansible_openvpn__rsa_bits }}
+  args:
+    chdir:   "{{ ansible_openvpn__key_dir }}"
+    creates: dh.pem
+
+- name: OPENVPN | Generate tls-auth key
+  command: openvpn --genkey --secret ta.key
+  args:
+    chdir: "{{ ansible_openvpn__key_dir }}"
+    creates: ta.key
+
+- name: OPENVPN | Creating vpnusers group
+  ansible.builtin.group:
+    name: vpnusers
+    state: present
+
+- name: OPENVPN | Creating users
+  user:
+    name: "{{ item.name }}"
+    update_password: always
+    password: "{{ item.password }}"
+    groups: "vpnusers"
+    home: "/home/{{ item.name }}"
+    shell: "/sbin/nologin"
+  with_items:
+    - "{{ ansible_openvpn__clients }}"
+  when: ( ansible_openvpn__clients is defined )
+
+- name: OPENVPN | Create Users Keys
+  command: easyrsa build-client-full {{ item.name }} nopass
+  args:
+    chdir:  "{{ ansible_openvpn__easyrsa_dir }}"
+    creates: "pki/private/{{ item.name }}.key"
+  with_items:
+    - "{{ ansible_openvpn__clients }}"
+  when: ( ansible_openvpn__clients is defined )
+
+- name: OPENVPN | Revoke Users
+  command: easyrsa --batch revoke "{{ item.name }}"
+  args:
+    chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
+    removes: "pki/private/{{ item.name }}.key"
+  with_items:
+    - "{{ ansible_openvpn__clients_revoked }}"
+  when: ( ansible_openvpn__clients_revoked is defined )
+
+- name: OPENVPN | Create CRL
+  command: easyrsa gen-crl
+  args:
+    chdir:  "{{ ansible_openvpn__easyrsa_dir }}"
+
+- name: OPENVPN | Copy CRL
+  copy:
+    remote_src: yes
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/crl.pem"
+    dest: "{{ ansible_openvpn__key_dir }}"
+    owner: "{{ ansible_openvpn__user }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode:  '0400'
+
+- name: OPENVPN | Register CA
+  slurp:
+    src: "{{ ansible_openvpn__key_dir}}/ca.crt"
+  register: ca_cert
+
+- name: OPENVPN | Register TA
+  slurp:
+    src: "{{ ansible_openvpn__key_dir}}/ta.key"
+  register: tls_auth
+
+- name: OPENVPN | Register Client CRT
+  slurp:
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/issued/{{ item.name }}.crt"
+  with_items:
+    - "{{ ansible_openvpn__clients }}"
+  register: client_certs
+
+- name: OPENVPN | Register Client KEY
+  slurp:
+    src: "{{ ansible_openvpn__easyrsa_dir }}/pki/private/{{ item.name }}.key"
+  with_items:
+    - "{{ ansible_openvpn__clients }}"
+  register: client_keys
+
+- name: OPENVPN | Criate Clients ovpn dir
+  file:
+    path: "{{ ansible_openvpn__ovpn_dir}}"
+    state: directory
+
+- name: OPENVPN | Generate Clients opvn config
+  template:
+    src:   client.ovpn.j2
+    dest:  "{{ ansible_openvpn__ovpn_dir }}/{{ item.0.item.name }}-{{ inventory_hostname }}.ovpn"
+    owner: root
+    group: root
+    mode:  '0400'
+  with_together:
+    - "{{ client_certs.results }}"
+    - "{{ client_keys.results  }}"
+
+- name: OPENVPN | Copy config
+  template:
+    src:   server.conf.j2
+    dest:  "{{ ansible_openvpn__config_dir }}/{{ ansible_openvpn__proto }}.conf"
+    owner: "{{ ansible_openvpn__user  }}"
+    group: "{{ ansible_openvpn__group }}"
+    mode:  '0400'
+  notify:  restart_openvpn_systemd
+
+- name: OPENVPN | Allow ip_forward
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: OPENVPN | Ensure openvpn starts on boot
+  systemd:
+    name:  "openvpn@{{ ansible_openvpn__proto }}"
+    enabled: yes
+

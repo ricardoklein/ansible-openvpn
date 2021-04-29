@@ -1,0 +1,42 @@
+# OpenVPN Port, Protocol and the Tun
+port  {{ ansible_openvpn__port  }}
+proto {{ ansible_openvpn__proto }}
+dev tun
+
+# OpenVPN Server Certificate - CA, server key and certificate
+ca   {{ ansible_openvpn__key_dir }}/ca.crt
+cert {{ ansible_openvpn__key_dir }}/server.crt
+key  {{ ansible_openvpn__key_dir }}/server.key
+
+#DH and CRL key
+dh         {{ ansible_openvpn__key_dir }}/dh.pem
+crl-verify {{ ansible_openvpn__key_dir }}/crl.pem
+
+{{ ansible_openvpn__tunnel_net }}
+
+{{ ansible_openvpn__push }}
+
+# PLUGINS
+{{ ansible_openvpn__plugins }}
+
+# TLS Security
+tls-auth {{ ansible_openvpn__key_dir }}/ta.key 0
+tls-server
+cipher {{ ansible_openvpn__cipher }}
+
+tls-version-min 1.2
+tls-cipher {{ ansible_openvpn__tls_cipher }}
+auth {{ ansible_openvpn__auth_alg }}
+auth-nocache
+
+# Other Configuration
+keepalive {{ ansible_openvpn__keepalive_ping }} {{ ansible_openvpn__keepalive_timeout }}
+persist-key
+persist-tun
+daemon
+user  {{ ansible_openvpn__user }}
+group {{ ansible_openvpn__group }}
+
+# OpenVPN Log
+log-append /var/log/openvpn.log
+verb 3
