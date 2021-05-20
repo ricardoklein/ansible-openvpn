@@ -154,6 +154,15 @@
     - "{{ ansible_openvpn__clients_revoked }}"
   when: ( ansible_openvpn__clients_revoked is defined )
 
+- name: OPENVPN | Creating users
+  user:
+    name: "{{ item.name }}"
+    state: absent
+    remove: yes
+  with_items:
+    - "{{ ansible_openvpn__clients_revoked }}"
+  when: ( ansible_openvpn__clients is defined )
+
 - name: OPENVPN | Create CRL
   command: easyrsa gen-crl
   args:
