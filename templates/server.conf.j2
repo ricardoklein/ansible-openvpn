@@ -38,5 +38,6 @@ user  {{ ansible_openvpn__user }}
 group {{ ansible_openvpn__group }}
 
 # OpenVPN Log
+status /var/log/openvpn-status-{{ ansible_openvpn__proto }}.log
 log-append /var/log/openvpn.log
 verb 3
