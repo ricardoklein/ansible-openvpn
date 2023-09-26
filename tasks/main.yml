@@ -5,38 +5,38 @@
   when: (ansible_os_family == 'Suse' )
   become: yes
 
-- name: OPENVPN | Enable Firewalld
-  systemd:
-    name: firewalld
-    enabled: yes
-    state: started
-
-- name: OPENVPN | FirewallD masquerade
-  firewalld:
-    masquerade: True
-    state: enabled
-    permanent: true
-    zone: public
-  notify:  restart_firewalld
-
-- name: OPENVPN | FirewallD set tun0 to zone trusted
-  firewalld:
-    interface: tun0
-    permanent: true
-    zone: trusted
-    state: enabled
-
-- name: OPENVPN | FirewallD allow SSH
-  firewalld:
-    service: ssh
-    permanent: true
-    state: enabled
-
-- name: OPENVPN | FirewallD allow openvpn
-  firewalld:
-    port: "{{ ansible_openvpn__port }}/{{ ansible_openvpn__proto }}"
-    permanent: true
-    state: enabled
+#- name: OPENVPN | Enable Firewalld
+#  systemd:
+#    name: firewalld
+#    enabled: yes
+#    state: started
+#
+#- name: OPENVPN | FirewallD masquerade
+#  firewalld:
+#    masquerade: True
+#    state: enabled
+#    permanent: true
+#    zone: public
+#  notify:  restart_firewalld
+#
+#- name: OPENVPN | FirewallD set tun0 to zone trusted
+#  firewalld:
+#    interface: tun0
+#    permanent: true
+#    zone: trusted
+#    state: enabled
+#
+#- name: OPENVPN | FirewallD allow SSH
+#  firewalld:
+#    service: ssh
+#    permanent: true
+#    state: enabled
+#
+#- name: OPENVPN | FirewallD allow openvpn
+#  firewalld:
+#    port: "{{ ansible_openvpn__port }}/{{ ansible_openvpn__proto }}"
+#    permanent: true
+#    state: enabled
 
 - name: OPENVPN | Create key directory
   file:
@@ -54,19 +54,19 @@
     group: root
     mode: '0700'
 
-- name: OPENVPN | Copy easyrsa vars
-  template:
-    src:   easyrsa_vars.j2
-    dest:  "{{ ansible_openvpn__easyrsa_dir }}/vars"
-    owner: root 
-    group: root
-    mode:  '0700'
-
 - name: OPENVPN | Init PKI
   command: easyrsa init-pki
   args:
     chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
     creates: "{{ ansible_openvpn__easyrsa_dir }}/pki"
+
+- name: OPENVPN | Copy easyrsa vars
+  template:
+    src:   easyrsa_vars.j2
+    dest:  "{{ ansible_openvpn__easyrsa_dir }}/pki/vars"
+    owner: root 
+    group: root
+    mode:  '0700'
 
 - name: OPENVPN | Build-ca
   command: easyrsa --batch build-ca nopass
@@ -84,7 +84,7 @@
     mode:  '0400'
     
 - name: OPENVPN | Create Server Key
-  command: easyrsa build-server-full server nopass
+  command: easyrsa --batch build-server-full server nopass
   args:
     chdir:   "{{ ansible_openvpn__easyrsa_dir }}"
     creates: "{{ ansible_openvpn__easyrsa_dir}}/pki/private/server.key"
@@ -137,7 +137,7 @@
   when: ( ansible_openvpn__clients is defined )
 
 - name: OPENVPN | Create Users Keys
-  command: easyrsa build-client-full {{ item.name }} nopass
+  command: easyrsa --batch build-client-full {{ item.name }} nopass
   args:
     chdir:  "{{ ansible_openvpn__easyrsa_dir }}"
     creates: "pki/private/{{ item.name }}.key"
